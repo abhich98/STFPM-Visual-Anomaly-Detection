@@ -1,0 +1,26 @@
+seed: 0
+device: cpu
+
+dataset:
+  name: mvtec
+  root: mvtec_anomaly_detection
+  category: carpet
+  image_size: 256
+  num_workers: 0
+  pin_memory: false
+  extensions: [png, jpg, jpeg]
+
+model:
+  name: resnet18
+  teacher_pretrained: true
+  student_pretrained: false
+  feature_layers: [layer1, layer2, layer3]
+
+train:
+  epochs: 100
+  batch_size: 32
+  val_split: 0.2
+  lr: 0.4
+  momentum: 0.9
+  weight_decay: 1.0e-4
+  checkpoint_dir: snapshots

@@ -1,75 +1,55 @@
-import os
-from skimage import measure
-from sklearn.metrics import roc_curve, auc
-import numpy as np
+from __future__ import annotations
+
+import argparse
+
+from stfpm.config import load_merged_config
+from stfpm.data import build_dataloaders
+from stfpm.evaluation import evaluate_checkpoint
+from stfpm.models import build_stfpm_model
+from stfpm.utils import resolve_device, set_seed
 
 
-def evaluate(labels, scores, metric='roc'):
-    if metric == 'pro':
-        return pro(labels, scores)
-    if metric == 'roc':
-        return roc(labels, scores)
-    else:
-        raise NotImplementedError("Check the evaluation metric.")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Evaluate STFPM model")
+    parser.add_argument(
+        "--default-config",
+        type=str,
+        default="configs/eval_mvtec.yaml",
+        help="Path to default eval config containing all parameters",
+    )
+    parser.add_argument(
+        "--user-config",
+        type=str,
+        default=None,
+        help="Optional user config with fields to override from default config",
+    )
+    parser.add_argument("--checkpoint", type=str, default=None, help="Optional checkpoint override")
+    return parser.parse_args()
 
 
-def roc(labels, scores):
-    fpr, tpr, _ = roc_curve(labels, scores)
-    roc_auc = auc(fpr, tpr)
-    return roc_auc
+def main() -> None:
+    args = parse_args()
+    config = load_merged_config(args.default_config, args.user_config)
+    set_seed(int(config.get("seed", 0)))
+    device = resolve_device(config.get("device", "cpu"))
+
+    loaders = build_dataloaders(config, split="test")
+    model = build_stfpm_model(config)
+
+    checkpoint_path = args.checkpoint or config.get("eval", {}).get("checkpoint_path")
+    if not checkpoint_path:
+        raise ValueError("Checkpoint is required. Provide --checkpoint or eval.checkpoint_path in config.")
+
+    metrics = evaluate_checkpoint(model, loaders["test"], config, checkpoint_path, device)
+    category = config["dataset"]["category"]
+    print(
+        "Category: {category}\tPixel-AUC: {pixel_auc:.6f}\tImage-AUC: {image_auc:.6f}\tPRO: {pro:.6f}".format(
+            category=category,
+            **metrics,
+        )
+    )
 
 
-def rescale(x):
-    return (x - x.min()) / (x.max() - x.min())
+if __name__ == "__main__":
+    main()
 
-
-def pro(masks, scores):
-    '''
-        https://github.com/YoungGod/DFR/blob/a942f344570db91bc7feefc6da31825cf15ba3f9/DFR-source/anoseg_dfr.py#L447
-    '''
-    # per region overlap
-    max_step = 4000
-    max_th = scores.max()
-    min_th = scores.min()
-    delta = (max_th - min_th) / max_step
-
-    pros_mean = []
-    pros_std = []
-    threds = []
-    fprs = []
-    binary_score_maps = np.zeros_like(scores, dtype=np.bool)
-    for step in range(max_step):
-        thred = max_th - step * delta
-        # segmentation
-        binary_score_maps[scores <= thred] = 0
-        binary_score_maps[scores > thred] = 1
-
-        pro = []
-        for i in range(len(binary_score_maps)):
-            label_map = measure.label(masks[i], connectivity=2)
-            props = measure.regionprops(label_map, binary_score_maps[i])
-            for prop in props:
-                pro.append(prop.intensity_image.sum() / prop.area)
-        pros_mean.append(np.array(pro).mean())
-        pros_std.append(np.array(pro).std())
-        # fpr
-        masks_neg = ~masks
-        fpr = np.logical_and(masks_neg, binary_score_maps).sum() / masks_neg.sum()
-        fprs.append(fpr)
-        threds.append(thred)
-
-    # as array
-    threds = np.array(threds)
-    pros_mean = np.array(pros_mean)
-    pros_std = np.array(pros_std)
-    fprs = np.array(fprs)
-
-    expect_fpr = 0.3
-    # default 30% fpr vs pro, pro_auc
-    idx = fprs <= expect_fpr    # # rescale fpr [0, 0.3] -> [0, 1]
-    fprs_selected = fprs[idx]
-    fprs_selected = rescale(fprs_selected)
-    pros_mean_selected = rescale(pros_mean[idx])    # need scale
-    pro_auc_score = auc(fprs_selected, pros_mean_selected)
-    # print("pro auc ({}% FPR):".format(int(expect_fpr * 100)), pro_auc_score)
-    return pro_auc_score

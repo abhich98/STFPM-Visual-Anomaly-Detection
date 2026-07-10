@@ -1,0 +1,25 @@
+seed: 0
+device: cpu
+
+dataset:
+  name: mvtec
+  root: mvtec_anomaly_detection
+  category: carpet
+  image_size: 256
+  num_workers: 0
+  pin_memory: false
+  extensions: [png, jpg, jpeg]
+
+model:
+  name: resnet18
+  teacher_pretrained: true
+  student_pretrained: false
+  feature_layers: [layer1, layer2, layer3]
+
+eval:
+  checkpoint_path: snapshots/carpet/best.pth.tar
+
+onnx:
+  output_path: artifacts/stfpm.onnx
+  dynamic_batch: true
+  opset: 17

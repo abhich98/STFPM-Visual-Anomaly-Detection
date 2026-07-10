@@ -1,0 +1,7 @@
+dataset:
+  category: carpet
+
+eval:
+  batch_size: 1
+
+device: cpu
