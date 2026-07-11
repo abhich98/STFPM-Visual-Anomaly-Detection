@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
 from stfpm.config import load_merged_config
 from stfpm.data import build_dataloaders
 from stfpm.evaluation import evaluate_checkpoint
 from stfpm.models import build_stfpm_model
 from stfpm.utils import resolve_device, set_seed
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,19 +38,19 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config = load_merged_config(args.default_config, args.user_config)
-    set_seed(int(config.get("seed", 0)))
-    device = resolve_device(config.get("device", "cpu"))
+    set_seed(int(config["seed"]))
+    device = resolve_device(config["device"])
 
     loaders = build_dataloaders(config, split="test")
     model = build_stfpm_model(config)
 
-    checkpoint_path = args.checkpoint or config.get("eval", {}).get("checkpoint_path")
+    checkpoint_path = args.checkpoint or config["eval"]["checkpoint_path"]
     if not checkpoint_path:
         raise ValueError("Checkpoint is required. Provide --checkpoint or eval.checkpoint_path in config.")
 
     metrics = evaluate_checkpoint(model, loaders["test"], config, checkpoint_path, device)
     category = config["dataset"]["category"]
-    print(
+    logger.info(
         "Category: {category}\tPixel-AUC: {pixel_auc:.6f}\tImage-AUC: {image_auc:.6f}\tPRO: {pro:.6f}".format(
             category=category,
             **metrics,

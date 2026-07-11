@@ -47,7 +47,7 @@ def pro(masks: np.ndarray, scores: np.ndarray) -> float:
             label_map = measure.label(masks[index], connectivity=2)
             props = measure.regionprops(label_map, binary_score_maps[index])
             for prop in props:
-                pro_values.append(prop.intensity_image.sum() / prop.area)
+                pro_values.append(prop.image_intensity.sum() / prop.area)
 
         pros_mean.append(float(np.mean(pro_values)) if pro_values else 0.0)
 

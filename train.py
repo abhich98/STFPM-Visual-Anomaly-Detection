@@ -10,6 +10,10 @@ from stfpm.training import train
 from stfpm.utils import resolve_device, set_seed
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 

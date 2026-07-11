@@ -40,15 +40,15 @@ def build_mvtec_dataloaders(config: dict[str, Any], split: str) -> dict[str, Dat
     dataset_cfg = config["dataset"]
     root = Path(dataset_cfg["root"])
     category = dataset_cfg["category"]
-    image_size = int(dataset_cfg["image_size"])
     extensions = dataset_cfg["extensions"]
     workers = int(dataset_cfg["num_workers"])
-    train_batch_size = int(config["train"]["batch_size"])
-    eval_batch_size = int(config["eval"]["batch_size"])
     pin_memory = bool(dataset_cfg["pin_memory"])
+
+    image_size = int(dataset_cfg["image_size"])
     transform = build_image_transform(image_size)
 
     if split == "train":
+        train_batch_size = int(config["train"]["batch_size"])
         image_paths = collect_mvtec_train_images(root, category, extensions)
         train_paths, val_paths = _split_train_val(image_paths, float(config["train"]["val_split"]), int(config["seed"]))
         train_ds = ImagePathDataset(train_paths, transform)
@@ -59,6 +59,7 @@ def build_mvtec_dataloaders(config: dict[str, Any], split: str) -> dict[str, Dat
         }
 
     if split == "test":
+        eval_batch_size = int(config["eval"]["batch_size"])
         samples = collect_mvtec_eval_samples(root, category, extensions)
         eval_ds = MVTecEvalDataset(samples, transform)
         return {

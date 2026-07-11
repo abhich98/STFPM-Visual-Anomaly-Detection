@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import logging
 
 import torch
 
 from stfpm.models.stfpm import STFPM
+
+
+logger = logging.getLogger(__name__)
 
 
 def _validation_error(model: STFPM, loader, device: torch.device, image_size: int) -> float:
@@ -46,9 +50,7 @@ def train(model: STFPM, train_loader, val_loader, config: dict[str, Any], device
         model.student.train()
         for _, batch_images in train_loader:
             images = batch_images.to(device, non_blocking=True)
-            with torch.no_grad():
-                t_feats = model.teacher(images)
-            s_feats = model.student(images)
+            t_feats, s_feats = model(images)
             loss = model.training_loss(t_feats, s_feats)
 
             optimizer.zero_grad(set_to_none=True)
@@ -56,7 +58,7 @@ def train(model: STFPM, train_loader, val_loader, config: dict[str, Any], device
             optimizer.step()
 
         val_error = _validation_error(model, val_loader, device, image_size=image_size)
-        print(f"[{epoch + 1}/{epochs}] val_error={val_error:.7f}")
+        logger.info(f"[{epoch + 1}/{epochs}] val_error={val_error:.7f}")
         if val_error < best_error:
             best_error = val_error
             checkpoint = {

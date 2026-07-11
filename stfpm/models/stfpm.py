@@ -10,6 +10,7 @@ class FeatureExtractor(torch.nn.Module):
     def __init__(self, backbone: torch.nn.Module, feature_layers: Iterable[str]):
         super().__init__()
         self.backbone = torch.nn.Sequential(*(list(backbone.children())[:-2]))
+        # self.backbone = backbone
         self.feature_layers = set(feature_layers)
 
     def forward(self, images: torch.Tensor) -> list[torch.Tensor]:

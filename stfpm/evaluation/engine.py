@@ -5,6 +5,8 @@ from typing import Any
 import numpy as np
 import torch
 
+from tqdm import tqdm
+
 from stfpm.data.mvtec import load_mask
 from stfpm.metrics import evaluate
 from stfpm.models.stfpm import STFPM
@@ -23,7 +25,7 @@ def evaluate_checkpoint(model: STFPM, loader, config: dict[str, Any], checkpoint
     pixel_labels: list[np.ndarray] = []
 
     with torch.inference_mode():
-        for batch in loader:
+        for batch in tqdm(loader, desc="Evaluating", leave=False):
             images = batch["image"].to(device, non_blocking=True)
             labels = batch["label"].cpu().numpy().tolist()
             mask_paths = batch["mask_path"]
