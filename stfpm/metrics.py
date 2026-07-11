@@ -3,11 +3,12 @@ from __future__ import annotations
 import numpy as np
 from skimage import measure
 from sklearn.metrics import auc, roc_curve
+from joblib import Parallel, delayed
 
 
-def evaluate(labels: np.ndarray, scores: np.ndarray, metric: str = "roc") -> float:
+def evaluate(labels: np.ndarray, scores: np.ndarray, metric: str = "roc", config: dict | None = None) -> float:
     if metric == "pro":
-        return pro(labels, scores)
+        return pro(labels, scores, config)
     if metric == "roc":
         return roc(labels, scores)
     raise NotImplementedError("Check the evaluation metric.")
@@ -27,20 +28,29 @@ def rescale(values: np.ndarray) -> np.ndarray:
     return (values - value_min) / denom
 
 
-def pro(masks: np.ndarray, scores: np.ndarray) -> float:
-    max_step = 4000
+def pro(masks: np.ndarray, scores: np.ndarray, config: dict | None = None) -> float:
+    if config is not None:
+        n_jobs = config["n_jobs"]
+        max_step = config["pro_max_step"]
+    else:
+        n_jobs = -1
+        max_step = 4000
+
     max_th = scores.max()
     min_th = scores.min()
-    delta = (max_th - min_th) / max_step if max_step > 0 else 0
+    delta = (max_th - min_th) / max_step if max_step > 0 else 0.0
 
-    pros_mean: list[float] = []
-    fprs: list[float] = []
-    binary_score_maps = np.zeros_like(scores, dtype=bool)
+    # binary_score_maps = np.zeros_like(scores, dtype=bool)
 
-    for step in range(max_step):
-        threshold = max_th - step * delta
-        binary_score_maps[scores <= threshold] = 0
-        binary_score_maps[scores > threshold] = 1
+    def compute_pro_fpr(
+        thresh: float,
+        scores: np.ndarray = scores,
+        masks: np.ndarray = masks,
+    ) -> tuple[float, float]:
+
+        binary_score_maps = np.zeros_like(scores, dtype=bool)
+        binary_score_maps[scores <= thresh] = 0
+        binary_score_maps[scores > thresh] = 1
 
         pro_values = []
         for index in range(len(binary_score_maps)):
@@ -49,12 +59,25 @@ def pro(masks: np.ndarray, scores: np.ndarray) -> float:
             for prop in props:
                 pro_values.append(prop.image_intensity.sum() / prop.area)
 
-        pros_mean.append(float(np.mean(pro_values)) if pro_values else 0.0)
+        pros_mean_val = float(np.mean(pro_values)) if pro_values else 0.0
 
         masks_neg = ~masks
         neg_sum = masks_neg.sum()
-        fpr = np.logical_and(masks_neg, binary_score_maps).sum() / neg_sum if neg_sum > 0 else 0.0
-        fprs.append(float(fpr))
+        fpr_val = np.logical_and(masks_neg, binary_score_maps).sum() / neg_sum if neg_sum > 0 else 0.0
+        return pros_mean_val, fpr_val
+
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(compute_pro_fpr)(
+            max_th - step * delta) 
+        for step in range(max_step)
+    )
+
+    pros_mean: list[float] = []
+    fprs: list[float] = []
+    for result in results:
+        pros_mean_val, fpr_val = result
+        pros_mean.append(pros_mean_val)
+        fprs.append(fpr_val)
 
     pros_mean_arr = np.array(pros_mean)
     fprs_arr = np.array(fprs)
