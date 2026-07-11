@@ -9,7 +9,10 @@ from stfpm.models import build_stfpm_model
 from stfpm.utils import set_seed
 
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, 
+    format="%(asctime)s - %(levelname)s - %(message)s"
+    )
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--default-config",
         type=str,
-        default="configs/export_onnx.yaml",
+        default="configs/default_config.yaml",
         help="Path to default export config containing all parameters",
     )
     parser.add_argument(

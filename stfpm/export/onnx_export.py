@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from typing import Any
 
@@ -37,18 +38,24 @@ def export_onnx(model: STFPM, config: dict[str, Any], checkpoint_path: str, outp
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     export_cfg = config["onnx"]
-    dynamic = bool(export_cfg["dynamic_batch"])
-    dynamic_axes = {"input": {0: "batch"}, "score_map": {0: "batch"}, "image_score": {0: "batch"}} if dynamic else None
+
+    export_kwargs = {
+        "export_params": True,
+        "opset_version": int(export_cfg["opset"]),
+        "do_constant_folding": True,
+        "input_names": ["input"],
+        "output_names": ["score_map", "image_score"],
+    }
+    if export_cfg["dynamo"]:
+        export_kwargs["dynamo"] = True
+        export_kwargs["dynamic_shapes"] = (
+            {0: torch.export.Dim("batch")},
+        )
 
     torch.onnx.export(
         wrapped,
         sample,
         str(out_path),
-        export_params=True,
-        opset_version=int(export_cfg["opset"]),
-        do_constant_folding=True,
-        input_names=["input"],
-        output_names=["score_map", "image_score"],
-        dynamic_axes=dynamic_axes,
+        **export_kwargs,
     )
     return str(out_path)

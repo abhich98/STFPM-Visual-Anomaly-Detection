@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--default-config",
         type=str,
-        default="configs/eval_mvtec.yaml",
+        default="configs/default_config.yaml",
         help="Path to default eval config containing all parameters",
     )
     parser.add_argument(

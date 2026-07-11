@@ -1,0 +1,37 @@
+seed: 0
+device: cuda
+
+dataset:
+  name: mvtec
+  root: mvtec_anomaly_detection
+  category: transistor # also change the path below for the best checkpoint path
+  image_size: 256
+  num_workers: 0
+  pin_memory: false
+  extensions: [png, jpg, jpeg]
+
+model:
+  name: resnet18
+  teacher_pretrained: true
+  student_pretrained: false
+  feature_layers: ['4', '5', '6'] #[layer1, layer2, layer3]
+
+train:
+  epochs: 40
+  batch_size: 64
+  val_split: 0.2
+  lr: 0.4
+  momentum: 0.9
+  weight_decay: 1.0e-4
+  checkpoint_dir: snapshots
+
+eval:
+  batch_size: 32
+  n_jobs: 10 # joblib parallelization for PRO score calculation
+  pro_max_step: 4000
+  checkpoint_path: snapshots/transistor/best.pth.tar
+
+onnx:
+  output_path: artifacts/stfpm.onnx
+  dynamo: true
+  opset: 20
