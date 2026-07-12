@@ -67,3 +67,7 @@ def load_merged_config(default_config_path: str | Path, user_config_path: str | 
         return default_config
     user_config = load_yaml_config(user_config_path)
     return deep_merge_dicts(default_config, user_config)
+
+
+def get_default_config_path() -> str:
+    return str(Path(__file__).parent.parent / "configs" / "default_config.yaml")

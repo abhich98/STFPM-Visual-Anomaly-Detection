@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from stfpm.config import load_merged_config
+from stfpm.config import get_default_config_path, load_merged_config
 from stfpm.deployment.inference import run_onnx_inference
 
 
@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--default-config",
         type=str,
-        default="configs/default_config.yaml",
+        default=get_default_config_path(),
         help="Path to default inference config containing all parameters",
     )
     parser.add_argument(

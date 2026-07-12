@@ -7,7 +7,7 @@ import torch
 
 from tqdm import tqdm
 
-from stfpm.calibration import (
+from stfpm.evaluation.calibration import (
     build_calibration_artifact,
     compute_threshold_at_target_fpr,
     save_calibration_artifact,

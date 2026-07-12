@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 
-from stfpm.calibration import load_calibration_artifact
+from stfpm.evaluation.calibration import load_calibration_artifact
 
 
 def preprocess_image(image_path: str, image_size: int) -> np.ndarray:

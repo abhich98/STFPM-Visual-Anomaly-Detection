@@ -28,7 +28,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from stfpm.config import load_merged_config
+from stfpm.config import get_default_config_path, load_merged_config
 from stfpm.data.common import build_image_transform
 from stfpm.data.mvtec import MVTecEvalDataset, collect_mvtec_eval_samples
 from stfpm.export.onnx_export import STFPMExportWrapper
@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--default-config",
         type=str,
-        default="configs/default_config.yaml",
+        default=get_default_config_path(),
         help="Path to default config containing all parameters",
     )
     parser.add_argument(
