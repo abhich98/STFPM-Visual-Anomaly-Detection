@@ -39,3 +39,13 @@ onnx:
   output_path: artifacts/stfpm.onnx
   dynamo: true
   opset: 20
+
+validation:
+  # Number of test images to validate (null = all images in the test split)
+  max_images: null
+  # Batch size for both PyTorch and ONNX inference during validation
+  batch_size: 32
+  # Max acceptable absolute error between PyTorch and ONNX outputs
+  tolerance: 1.0e-5
+  # Optional path to save validation results as JSON (null = don't save)
+  output_json: null
