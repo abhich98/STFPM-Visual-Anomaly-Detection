@@ -49,3 +49,17 @@ validation:
   tolerance: 1.0e-5
   # Optional path to save validation results as JSON (null = don't save)
   output_json: null
+
+benchmark:
+  # Number of warmup iterations (results discarded, not timed)
+  warmup_iters: 10
+  # Number of timed iterations (results recorded)
+  timed_iters: 100
+  # Batch size for benchmarking (images per forward pass)
+  batch_size: 1
+  # Which backends to benchmark
+  backends: [pytorch, onnx]
+  # Whether to use real images from the test set (false = random tensors for pure speed)
+  use_real_images: false
+  # Optional path to save benchmark results as JSON (null = don't save)
+  output_json: null
