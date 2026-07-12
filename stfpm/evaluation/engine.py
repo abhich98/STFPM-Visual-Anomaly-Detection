@@ -109,9 +109,9 @@ def evaluate_checkpoint(
             logger.info("Saved calibration artifact: %s", saved_path)
 
     # --- Generate and save plots ---
-    plots_dir = config.get("eval", {}).get("plots_dir")
+    plots_dir = config["eval"]["plots_dir"]
     if plots_dir:
-        calibrated_threshold_val = metrics.get("calibrated_threshold")
+        calibrated_threshold_val = metrics["calibrated_threshold"]
         calibrated_preds = None
         if calibrated_threshold_val is not None:
             calibrated_preds = (image_scores >= calibrated_threshold_val).astype(np.int64)

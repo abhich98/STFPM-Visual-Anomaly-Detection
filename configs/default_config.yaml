@@ -33,12 +33,13 @@ eval:
   # Directory to save evaluation plots (confusion matrix, ROC curves). null = don't save.
   plots_dir: results/transistor
   calibration:
-    enabled: false
+    enabled: true
+    # Target false positive rate for calibration
     target_fpr: 0.01
     output_path: artifacts/calibration.json
 
 onnx:
-  output_path: artifacts/stfpm.onnx
+  output_path: artifacts/stfpm_transistor.onnx
   dynamo: true
   opset: 20
 
@@ -50,7 +51,7 @@ validation:
   # Max acceptable absolute error between PyTorch and ONNX outputs
   tolerance: 1.0e-5
   # Optional path to save validation results as JSON (null = don't save)
-  output_json: null
+  output_json: results/validation_num_eq.json
 
 benchmark:
   # Number of warmup iterations (results discarded, not timed)
@@ -62,6 +63,6 @@ benchmark:
   # Which backends to benchmark
   backends: [pytorch, onnx]
   # Whether to use real images from the test set (false = random tensors for pure speed)
-  use_real_images: false
+  use_real_images: true
   # Optional path to save benchmark results as JSON (null = don't save)
-  output_json: null
+  output_json: artifacts/benchmark_results.json

@@ -1,6 +1,10 @@
+[build-system]
+requires = ["uv-build>=0.6.0,<0.11"]
+build-backend = "uv_build"
+
 [project]
 name = "stfpm-visual-anomaly-detection"
-version = "0.1.0"
+version = "0.2.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,3 +27,12 @@ onnx = [
 	"onnxruntime>=1.19.0",
 	"onnxscript>=0.7.1",
 ]
+onnx-gpu = [
+	"onnx>=1.16.0",
+	"onnxruntime-gpu>=1.19.0,<=1.26.0",
+	"onnxscript>=0.7.1",
+]
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = ["stfpm"]
