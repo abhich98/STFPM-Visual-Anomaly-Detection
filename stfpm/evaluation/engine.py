@@ -12,6 +12,7 @@ from stfpm.evaluation.calibration import (
     compute_threshold_at_target_fpr,
     save_calibration_artifact,
 )
+from stfpm.evaluation.visualizations import save_evaluation_plots
 from stfpm.data.mvtec import load_mask
 from stfpm.metrics import evaluate
 from stfpm.models.stfpm import STFPM
@@ -106,5 +107,28 @@ def evaluate_checkpoint(
             )
             saved_path = save_calibration_artifact(str(output_path), artifact)
             logger.info("Saved calibration artifact: %s", saved_path)
+
+    # --- Generate and save plots ---
+    plots_dir = config.get("eval", {}).get("plots_dir")
+    if plots_dir:
+        calibrated_threshold_val = metrics.get("calibrated_threshold")
+        calibrated_preds = None
+        if calibrated_threshold_val is not None:
+            calibrated_preds = (image_scores >= calibrated_threshold_val).astype(np.int64)
+
+        saved_plots = save_evaluation_plots(
+            image_labels=image_label_arr,
+            image_scores=image_scores,
+            pixel_labels=pixel_arr.flatten(),
+            pixel_scores=score_arr.flatten(),
+            category=str(config["dataset"]["category"]),
+            output_dir=str(plots_dir),
+            image_auc=image_auc,
+            pixel_auc=pixel_auc,
+            calibrated_threshold=calibrated_threshold_val,
+            calibrated_predictions=calibrated_preds,
+        )
+        for name, path in saved_plots.items():
+            logger.info("Saved plot: %s -> %s", name, path)
 
     return metrics

@@ -30,6 +30,8 @@ eval:
   n_jobs: 10 # joblib parallelization for PRO score calculation
   pro_max_step: 4000
   checkpoint_path: snapshots/transistor/best.pth.tar
+  # Directory to save evaluation plots (confusion matrix, ROC curves). null = don't save.
+  plots_dir: results/transistor
   calibration:
     enabled: false
     target_fpr: 0.01
