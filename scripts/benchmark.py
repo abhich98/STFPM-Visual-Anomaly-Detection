@@ -26,8 +26,8 @@ import torch
 from stfpm.config import load_merged_config
 from stfpm.data.common import build_image_transform
 from stfpm.data.mvtec import MVTecEvalDataset, collect_mvtec_eval_samples
-from stfpm.export.onnx_export import STFPMExportWrapper
-from stfpm.models import build_stfpm_model
+from stfpm.deployment.onnx_runtime import get_onnx_providers, load_onnx_session, run_onnx_batch
+from stfpm.models import build_inference_wrapper
 from stfpm.utils import resolve_device, set_seed
 from torch.utils.data import DataLoader
 from stfpm.config import get_default_config_path
@@ -147,7 +147,7 @@ def _prepare_inputs(
     logger.info("Using real images from test set")
     root = Path(config["dataset"]["root"])
     category = config["dataset"]["category"]
-    extensions = config["dataset"].get("extensions", ["png", "jpg", "jpeg"])
+    extensions = config["dataset"]["extensions"]
     samples = collect_mvtec_eval_samples(root, category, extensions)
     if not samples:
         raise RuntimeError(f"No test images found for category '{category}' in {root}")
@@ -185,15 +185,9 @@ def _benchmark_pytorch(
 ) -> dict[str, Any]:
     logger.info("Benchmarking PyTorch...")
 
-    checkpoint_path = config["eval"]["checkpoint_path"]
     image_size = int(config["dataset"]["image_size"])
 
-    model = build_stfpm_model(config)
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.student.load_state_dict(checkpoint["state_dict"])
-    model.to(device)
-    model.eval()
-    wrapper = STFPMExportWrapper(model, image_size=image_size).to(device).eval()
+    wrapper = build_inference_wrapper(config, device)
 
     # Warmup
     logger.info("  Warmup: %d iterations", warmup_iters)
@@ -247,7 +241,7 @@ def _benchmark_pytorch(
     }
 
     # Cleanup
-    del model, wrapper
+    del wrapper
     gc.collect()
     if device.type == "cuda":
         torch.cuda.empty_cache()
@@ -259,12 +253,6 @@ def _benchmark_pytorch(
 # ONNX Runtime benchmark
 # ---------------------------------------------------------------------------
 
-def _get_onnx_providers(use_gpu: bool) -> list[str]:
-    if use_gpu:
-        return ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    return ["CPUExecutionProvider"]
-
-
 def _benchmark_onnx(
     config: dict[str, Any],
     inputs: list[torch.Tensor],
@@ -274,20 +262,18 @@ def _benchmark_onnx(
 ) -> dict[str, Any]:
     logger.info("Benchmarking ONNX Runtime...")
 
-    try:
-        import onnxruntime as ort
-    except ImportError:
-        logger.warning("onnxruntime not installed, skipping ONNX benchmark")
-        return {"backend": "onnx", "error": "onnxruntime not installed"}
-
     onnx_path = config["onnx"]["output_path"]
     if not Path(onnx_path).exists():
         logger.warning("ONNX file not found: %s, skipping ONNX benchmark", onnx_path)
         return {"backend": "onnx", "error": f"ONNX file not found: {onnx_path}"}
 
     use_gpu = device.type == "cuda"
-    providers = _get_onnx_providers(use_gpu=use_gpu)
-    session = ort.InferenceSession(onnx_path, providers=providers)
+    providers = get_onnx_providers(use_gpu=use_gpu)
+    try:
+        session = load_onnx_session(onnx_path, providers=providers)
+    except RuntimeError as exc:
+        logger.warning("%s, skipping ONNX benchmark", exc)
+        return {"backend": "onnx", "error": str(exc)}
     logger.info("  ONNX providers: %s", providers)
 
     # Convert inputs to numpy (ONNX Runtime always takes numpy)
@@ -296,7 +282,7 @@ def _benchmark_onnx(
     # Warmup
     logger.info("  Warmup: %d iterations", warmup_iters)
     for i in range(warmup_iters):
-        _ = session.run(["score_map", "image_score"], {"input": inputs_np[i % len(inputs_np)]})
+        _ = run_onnx_batch(session, inputs_np[i % len(inputs_np)])
 
     # Timed run
     logger.info("  Timed: %d iterations", timed_iters)
@@ -306,7 +292,7 @@ def _benchmark_onnx(
     for i in range(timed_iters):
         inp = inputs_np[i % len(inputs_np)]
         start = time.perf_counter()
-        _ = session.run(["score_map", "image_score"], {"input": inp})
+        _ = run_onnx_batch(session, inp)
         end = time.perf_counter()
         latencies.append((end - start) * 1000.0)  # ms
 
@@ -353,11 +339,11 @@ def _get_model_sizes(config: dict[str, Any]) -> dict[str, float]:
     """Get model file sizes in MB."""
     sizes: dict[str, float] = {}
 
-    checkpoint_path = config.get("eval", {}).get("checkpoint_path")
+    checkpoint_path = config["eval"]["checkpoint_path"]
     if checkpoint_path and Path(checkpoint_path).exists():
         sizes["pytorch_checkpoint_mb"] = Path(checkpoint_path).stat().st_size / (1024 * 1024)
 
-    onnx_path = config.get("onnx", {}).get("output_path")
+    onnx_path = config["onnx"]["output_path"]
     if onnx_path and Path(onnx_path).exists():
         sizes["onnx_model_mb"] = Path(onnx_path).stat().st_size / (1024 * 1024)
 
@@ -444,16 +430,16 @@ def _format_results(results: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 def run_benchmark(config: dict[str, Any]) -> dict[str, Any]:
-    device = resolve_device(config.get("device", "cpu"))
+    device = resolve_device(config["device"])
     image_size = int(config["dataset"]["image_size"])
 
-    bench_cfg = config.get("benchmark", {})
-    warmup_iters = int(bench_cfg.get("warmup_iters", 10))
-    timed_iters = int(bench_cfg.get("timed_iters", 100))
-    batch_size = int(bench_cfg.get("batch_size", 1))
+    bench_cfg = config["benchmark"]
+    warmup_iters = int(bench_cfg["warmup_iters"])
+    timed_iters = int(bench_cfg["timed_iters"])
+    batch_size = int(bench_cfg["batch_size"])
     batch_size = max(1, batch_size)
-    backends = bench_cfg.get("backends", ["pytorch", "onnx"])
-    use_real_images = bool(bench_cfg.get("use_real_images", False))
+    backends = bench_cfg["backends"]
+    use_real_images = bool(bench_cfg["use_real_images"])
 
     logger.info(
         "Benchmark config: batch_size=%d, warmup=%d, timed=%d, backends=%s, real_images=%s",
@@ -515,14 +501,14 @@ def run_benchmark(config: dict[str, Any]) -> dict[str, Any]:
 def main() -> None:
     args = parse_args()
     config = load_merged_config(args.default_config, args.user_config)
-    set_seed(int(config.get("seed", 0)))
+    set_seed(int(config["seed"]))
 
     results = run_benchmark(config)
 
     report = _format_results(results)
     print(report)
 
-    output_json = config.get("benchmark", {}).get("output_json")
+    output_json = config["benchmark"]["output_json"]
     if output_json:
         output_path = Path(output_json)
         output_path.parent.mkdir(parents=True, exist_ok=True)

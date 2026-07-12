@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional calibration JSON produced by evaluate.py for is_anomaly decision",
     )
+    parser.add_argument("--output_dir", type=str, default=None, help="Output dir to save output score map image")
     return parser.parse_args()
 
 
@@ -50,10 +51,23 @@ def main() -> None:
         image_size,
         calibration_params_path=args.calibration_params,
         category=str(config["dataset"]["category"]),
+        use_gpu=config["device"].lower().startswith("cuda"),
     )
     logger.info(f"Image score: {result['image_score']:.6f}")
     if "is_anomaly" in result:
         logger.info("Decision: is_anomaly=%s (threshold=%.6f)", result["is_anomaly"], result["threshold"])
+
+    if args.output_dir:
+        
+        from stfpm.deployment.inference import save_score_map_overlay
+
+        save_score_map_overlay(
+            args.image,
+            result["score_map"][0, 0],
+            args.output_dir,
+            is_anomaly=result.get("is_anomaly", None),
+        )
+        logger.info(f"Saved score map overlay to {args.output_dir}")
 
 
 if __name__ == "__main__":

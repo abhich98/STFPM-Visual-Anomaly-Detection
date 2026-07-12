@@ -1,5 +1,5 @@
 """
-Phase 6 — Validate ONNX numerical equivalence against PyTorch.
+Validate ONNX numerical equivalence against PyTorch.
 
 Runs the same set of images through both the PyTorch model and the exported
 ONNX graph, then compares ``score_map`` and ``image_score`` outputs.
@@ -31,8 +31,8 @@ from torch.utils.data import DataLoader
 from stfpm.config import get_default_config_path, load_merged_config
 from stfpm.data.common import build_image_transform
 from stfpm.data.mvtec import MVTecEvalDataset, collect_mvtec_eval_samples
-from stfpm.export.onnx_export import STFPMExportWrapper
-from stfpm.models import build_stfpm_model
+from stfpm.deployment.onnx_runtime import get_onnx_providers, load_onnx_session, run_onnx_batch
+from stfpm.models import build_inference_wrapper
 from stfpm.utils import resolve_device, set_seed
 
 
@@ -60,32 +60,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _get_onnx_providers(use_gpu: bool) -> list[str]:
-    """Return ONNX Runtime providers, GPU-first with CPU fallback."""
-    if use_gpu:
-        return ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    return ["CPUExecutionProvider"]
-
-
-def _load_onnx_session(onnx_path: str, providers: list[str]):
-    try:
-        import onnxruntime as ort
-    except ImportError as exc:
-        raise RuntimeError(
-            "onnxruntime is required for validation. Install with `pip install onnxruntime`."
-        ) from exc
-
-    if not Path(onnx_path).exists():
-        raise FileNotFoundError(f"ONNX file not found: {onnx_path}")
-
-    session = ort.InferenceSession(onnx_path, providers=providers)
-    available = ort.get_available_providers()
-    logger.info("ONNX providers requested: %s (available: %s)", providers, available)
-    return session
-
-
 def _run_pytorch(
-    wrapper: STFPMExportWrapper, images: torch.Tensor
+    wrapper, images: torch.Tensor
 ) -> tuple[np.ndarray, np.ndarray]:
     """Run PyTorch model and return (score_map, image_score) as numpy arrays."""
     with torch.inference_mode():
@@ -98,47 +74,39 @@ def _run_pytorch(
 
 def _run_onnx(session, images_np: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Run ONNX Runtime and return (score_map, image_score) as numpy arrays."""
-    score_map, image_score = session.run(
-        ["score_map", "image_score"],
-        {"input": images_np},
-    )
+    score_map, image_score = run_onnx_batch(session, images_np)
     return score_map.squeeze(1), image_score
 
 
 def validate(config: dict[str, Any]) -> dict[str, Any]:
     # --- Resolve device ---
-    device = resolve_device(config.get("device", "cpu"))
+    device = resolve_device(config["device"])
     use_gpu = device.type == "cuda"
 
     image_size = int(config["dataset"]["image_size"])
     category = config["dataset"]["category"]
 
-    val_cfg = config.get("validation", {})
-    batch_size = int(val_cfg.get("batch_size", 32))
+    val_cfg = config["validation"]
+    batch_size = int(val_cfg["batch_size"])
     batch_size = max(1, batch_size)
-    max_images = val_cfg.get("max_images")
+    max_images = val_cfg["max_images"]
     if max_images is not None:
         max_images = int(max_images)
-    tolerance = float(val_cfg.get("tolerance", 1e-5))
-    output_json = val_cfg.get("output_json")
+    tolerance = float(val_cfg["tolerance"])
+    output_json = val_cfg["output_json"]
 
     # --- Build PyTorch model ---
     checkpoint_path = config["eval"]["checkpoint_path"]
-    model = build_stfpm_model(config)
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.student.load_state_dict(checkpoint["state_dict"])
-    model.to(device)
-    model.eval()
-    wrapper = STFPMExportWrapper(model, image_size=image_size).to(device).eval()
+    wrapper = build_inference_wrapper(config, device)
 
     # --- Load ONNX model ---
     onnx_path = config["onnx"]["output_path"]
-    providers = _get_onnx_providers(use_gpu=use_gpu)
-    session = _load_onnx_session(onnx_path, providers=providers)
+    providers = get_onnx_providers(use_gpu=use_gpu)
+    session = load_onnx_session(onnx_path, providers=providers)
 
     # --- Collect test images ---
     root = Path(config["dataset"]["root"])
-    extensions = config["dataset"].get("extensions", ["png", "jpg", "jpeg"])
+    extensions = config["dataset"]["extensions"]
     samples = collect_mvtec_eval_samples(root, category, extensions)
     if not samples:
         raise RuntimeError(f"No test images found for category '{category}' in {root}")
@@ -164,8 +132,8 @@ def validate(config: dict[str, Any]) -> dict[str, Any]:
         batch_size=batch_size,
         shuffle=False,
         drop_last=False,
-        num_workers=int(config["dataset"].get("num_workers", 0)),
-        pin_memory=bool(config["dataset"].get("pin_memory", False)),
+        num_workers=int(config["dataset"]["num_workers"]),
+        pin_memory=bool(config["dataset"]["pin_memory"]),
     )
 
     # --- Run validation in batches ---
@@ -273,14 +241,14 @@ def _format_results(results: dict[str, Any]) -> str:
 def main() -> None:
     args = parse_args()
     config = load_merged_config(args.default_config, args.user_config)
-    set_seed(int(config.get("seed", 0)))
+    set_seed(int(config["seed"]))
 
     results = validate(config)
 
     report = _format_results(results)
     print(report)
 
-    output_json = config.get("validation", {}).get("output_json")
+    output_json = config["validation"]["output_json"]
     if output_json:
         output_path = Path(output_json)
         output_path.parent.mkdir(parents=True, exist_ok=True)
