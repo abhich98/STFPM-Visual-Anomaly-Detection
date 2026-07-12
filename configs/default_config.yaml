@@ -30,6 +30,10 @@ eval:
   n_jobs: 10 # joblib parallelization for PRO score calculation
   pro_max_step: 4000
   checkpoint_path: snapshots/transistor/best.pth.tar
+  calibration:
+    enabled: false
+    target_fpr: 0.01
+    output_path: artifacts/calibration.json
 
 onnx:
   output_path: artifacts/stfpm.onnx

@@ -48,7 +48,16 @@ def main() -> None:
     if not checkpoint_path:
         raise ValueError("Checkpoint is required. Provide --checkpoint or eval.checkpoint_path in config.")
 
-    metrics = evaluate_checkpoint(model, loaders["test"], config, checkpoint_path, device)
+    calibration_cfg = dict(config["eval"]["calibration"])
+
+    metrics = evaluate_checkpoint(
+        model,
+        loaders["test"],
+        config,
+        checkpoint_path,
+        device,
+        calibration_cfg=calibration_cfg,
+    )
     category = config["dataset"]["category"]
     logger.info(
         "Category: {category}\tPixel-AUC: {pixel_auc:.6f}\tImage-AUC: {image_auc:.6f}\tPRO: {pro:.6f}".format(
@@ -56,6 +65,16 @@ def main() -> None:
             **metrics,
         )
     )
+
+    if "calibrated_threshold" in metrics:
+        logger.info(
+            "Calibration\tthreshold=%.6f\ttarget_fpr=%.4f\tprecision=%.4f\trecall=%.4f\tf1=%.4f",
+            metrics["calibrated_threshold"],
+            metrics["calibrated_target_fpr"],
+            metrics["calibrated_precision"],
+            metrics["calibrated_recall"],
+            metrics["calibrated_f1"],
+        )
 
 
 if __name__ == "__main__":

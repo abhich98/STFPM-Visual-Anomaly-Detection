@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image
 from torchvision import transforms
+
+from stfpm.calibration import load_calibration_artifact
 
 
 def preprocess_image(image_path: str, image_size: int) -> np.ndarray:
@@ -20,7 +23,13 @@ def preprocess_image(image_path: str, image_size: int) -> np.ndarray:
     return tensor.numpy().astype(np.float32)
 
 
-def run_onnx_inference(onnx_path: str, image_path: str, image_size: int) -> dict[str, np.ndarray | float]:
+def run_onnx_inference(
+    onnx_path: str,
+    image_path: str,
+    image_size: int,
+    calibration_params_path: str | None = None,
+    category: str | None = None,
+) -> dict[str, np.ndarray | float | bool]:
     try:
         import onnxruntime as ort
     except ImportError as exc:
@@ -32,4 +41,24 @@ def run_onnx_inference(onnx_path: str, image_path: str, image_size: int) -> dict
     session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
     input_tensor = preprocess_image(image_path, image_size=image_size)
     score_map, image_score = session.run(["score_map", "image_score"], {"input": input_tensor})
-    return {"score_map": score_map, "image_score": float(image_score[0])}
+    output: dict[str, np.ndarray | float | bool] = {
+        "score_map": score_map,
+        "image_score": float(image_score[0]),
+    }
+
+    if calibration_params_path:
+        calibration: dict[str, Any] = load_calibration_artifact(calibration_params_path)
+        if category is not None and str(calibration.get("category", category)) != str(category):
+            raise ValueError(
+                f"Calibration category mismatch: expected '{category}', got '{calibration.get('category')}'."
+            )
+        if "image_size" in calibration and int(calibration["image_size"]) != int(image_size):
+            raise ValueError(
+                f"Calibration image_size mismatch: expected {image_size}, got {calibration['image_size']}."
+            )
+
+        threshold = float(calibration["threshold"])
+        output["threshold"] = threshold
+        output["is_anomaly"] = bool(output["image_score"] >= threshold)
+
+    return output

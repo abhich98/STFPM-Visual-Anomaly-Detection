@@ -24,7 +24,7 @@ class STFPMExportWrapper(torch.nn.Module):
 
 
 def export_onnx(model: STFPM, config: dict[str, Any], checkpoint_path: str, output_path: str) -> str:
-    device = torch.device("cpu")
+    device = torch.device(config["device"])
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.student.load_state_dict(checkpoint["state_dict"])
     model.to(device)
