@@ -8,11 +8,9 @@ from stfpm.export import export_onnx
 from stfpm.models import build_stfpm_model
 from stfpm.utils import set_seed
 
-
 logging.basicConfig(
-    level=logging.INFO, 
-    format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +39,9 @@ def main() -> None:
 
     checkpoint_path = config["eval"]["checkpoint_path"]
     if not checkpoint_path:
-        raise ValueError("Checkpoint is required. Provide --checkpoint or eval.checkpoint_path in config.")
+        raise ValueError(
+            "Checkpoint is required. Provide --checkpoint or eval.checkpoint_path in config."
+        )
 
     output_path = config["onnx"]["output_path"]
     exported = export_onnx(model, config, checkpoint_path, output_path)

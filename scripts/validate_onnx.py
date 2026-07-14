@@ -15,6 +15,7 @@ Usage:
     # With only default config
     python validate_onnx.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,10 +32,13 @@ from torch.utils.data import DataLoader
 from stfpm.config import get_default_config_path, load_merged_config
 from stfpm.data.common import build_image_transform
 from stfpm.data.mvtec import MVTecEvalDataset, collect_mvtec_eval_samples
-from stfpm.deployment.onnx_runtime import get_onnx_providers, load_onnx_session, run_onnx_batch
+from stfpm.deployment.onnx_runtime import (
+    get_onnx_providers,
+    load_onnx_session,
+    run_onnx_batch,
+)
 from stfpm.models import build_inference_wrapper
 from stfpm.utils import resolve_device, set_seed
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +48,9 @@ logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Validate ONNX outputs against PyTorch")
+    parser = argparse.ArgumentParser(
+        description="Validate ONNX outputs against PyTorch"
+    )
     parser.add_argument(
         "--default-config",
         type=str,
@@ -60,9 +66,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _run_pytorch(
-    wrapper, images: torch.Tensor
-) -> tuple[np.ndarray, np.ndarray]:
+def _run_pytorch(wrapper, images: torch.Tensor) -> tuple[np.ndarray, np.ndarray]:
     """Run PyTorch model and return (score_map, image_score) as numpy arrays."""
     with torch.inference_mode():
         score_map, image_score = wrapper(images)

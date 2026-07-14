@@ -9,6 +9,7 @@ Usage:
     python benchmark.py
     python benchmark.py --user-config configs/user_benchmark.yaml
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,12 +27,15 @@ import torch
 from stfpm.config import load_merged_config
 from stfpm.data.common import build_image_transform
 from stfpm.data.mvtec import MVTecEvalDataset, collect_mvtec_eval_samples
-from stfpm.deployment.onnx_runtime import get_onnx_providers, load_onnx_session, run_onnx_batch
+from stfpm.deployment.onnx_runtime import (
+    get_onnx_providers,
+    load_onnx_session,
+    run_onnx_batch,
+)
 from stfpm.models import build_inference_wrapper
 from stfpm.utils import resolve_device, set_seed
 from torch.utils.data import DataLoader
 from stfpm.config import get_default_config_path
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,7 +45,9 @@ logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Benchmark STFPM inference (PyTorch vs ONNX)")
+    parser = argparse.ArgumentParser(
+        description="Benchmark STFPM inference (PyTorch vs ONNX)"
+    )
     parser.add_argument(
         "--default-config",
         type=str,
@@ -61,6 +67,7 @@ def parse_args() -> argparse.Namespace:
 # System info
 # ---------------------------------------------------------------------------
 
+
 def _get_system_info() -> dict[str, str]:
     info: dict[str, str] = {
         "platform": platform.platform(),
@@ -70,6 +77,7 @@ def _get_system_info() -> dict[str, str]:
 
     try:
         import torch as _torch
+
         info["torch_version"] = _torch.__version__
         info["torchvision_version"] = _torchvision_version()
     except Exception:
@@ -77,6 +85,7 @@ def _get_system_info() -> dict[str, str]:
 
     try:
         import onnxruntime as _ort
+
         info["onnxruntime_version"] = _ort.__version__
         info["onnx_available_providers"] = ",".join(_ort.get_available_providers())
     except Exception:
@@ -96,12 +105,14 @@ def _get_system_info() -> dict[str, str]:
 
 def _torchvision_version() -> str:
     import torchvision
+
     return torchvision.__version__
 
 
 # ---------------------------------------------------------------------------
 # Memory measurement
 # ---------------------------------------------------------------------------
+
 
 def _get_peak_memory_mb(device: torch.device) -> float:
     """Return peak memory in MB. Uses tracemalloc for CPU, torch.cuda for GPU."""
@@ -112,6 +123,7 @@ def _get_peak_memory_mb(device: torch.device) -> float:
             return 0.0
     else:
         import tracemalloc
+
         current, peak = tracemalloc.get_traced_memory()
         return peak / (1024 * 1024)
 
@@ -121,6 +133,7 @@ def _reset_memory_tracking(device: torch.device) -> None:
         torch.cuda.reset_peak_memory_stats(device)
     else:
         import tracemalloc
+
         tracemalloc.stop()
         tracemalloc.start()
 
@@ -128,6 +141,7 @@ def _reset_memory_tracking(device: torch.device) -> None:
 # ---------------------------------------------------------------------------
 # Input preparation
 # ---------------------------------------------------------------------------
+
 
 def _prepare_inputs(
     config: dict[str, Any],
@@ -141,7 +155,10 @@ def _prepare_inputs(
 
     if not use_real_images:
         logger.info("Using random tensors (pure inference speed)")
-        return [torch.randn(batch_size, 3, image_size, image_size, device=device) for _ in range(num_iters)]
+        return [
+            torch.randn(batch_size, 3, image_size, image_size, device=device)
+            for _ in range(num_iters)
+        ]
 
     # Use real images from test set
     logger.info("Using real images from test set")
@@ -175,6 +192,7 @@ def _prepare_inputs(
 # ---------------------------------------------------------------------------
 # PyTorch benchmark
 # ---------------------------------------------------------------------------
+
 
 def _benchmark_pytorch(
     config: dict[str, Any],
@@ -236,7 +254,9 @@ def _benchmark_pytorch(
             "p95": float(np.percentile(latencies_arr, 95)),
             "p99": float(np.percentile(latencies_arr, 99)),
         },
-        "throughput_img_per_sec": float(total_images / total_time_s) if total_time_s > 0 else 0.0,
+        "throughput_img_per_sec": (
+            float(total_images / total_time_s) if total_time_s > 0 else 0.0
+        ),
         "peak_memory_mb": float(peak_memory),
     }
 
@@ -252,6 +272,7 @@ def _benchmark_pytorch(
 # ---------------------------------------------------------------------------
 # ONNX Runtime benchmark
 # ---------------------------------------------------------------------------
+
 
 def _benchmark_onnx(
     config: dict[str, Any],
@@ -319,7 +340,9 @@ def _benchmark_onnx(
             "p95": float(np.percentile(latencies_arr, 95)),
             "p99": float(np.percentile(latencies_arr, 99)),
         },
-        "throughput_img_per_sec": float(total_images / total_time_s) if total_time_s > 0 else 0.0,
+        "throughput_img_per_sec": (
+            float(total_images / total_time_s) if total_time_s > 0 else 0.0
+        ),
         "peak_memory_mb": float(peak_memory),
     }
 
@@ -335,13 +358,16 @@ def _benchmark_onnx(
 # Model size
 # ---------------------------------------------------------------------------
 
+
 def _get_model_sizes(config: dict[str, Any]) -> dict[str, float]:
     """Get model file sizes in MB."""
     sizes: dict[str, float] = {}
 
     checkpoint_path = config["eval"]["checkpoint_path"]
     if checkpoint_path and Path(checkpoint_path).exists():
-        sizes["pytorch_checkpoint_mb"] = Path(checkpoint_path).stat().st_size / (1024 * 1024)
+        sizes["pytorch_checkpoint_mb"] = Path(checkpoint_path).stat().st_size / (
+            1024 * 1024
+        )
 
     onnx_path = config["onnx"]["output_path"]
     if onnx_path and Path(onnx_path).exists():
@@ -353,6 +379,7 @@ def _get_model_sizes(config: dict[str, Any]) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
+
 
 def _format_results(results: dict[str, Any]) -> str:
     lines: list[str] = [
@@ -410,7 +437,9 @@ def _format_results(results: dict[str, Any]) -> str:
     valid_benchmarks = [b for b in results["benchmarks"] if "error" not in b]
     if len(valid_benchmarks) >= 2:
         lines.append("  Comparison:")
-        lines.append(f"    {'Backend':<15} {'Mean (ms)':<12} {'P95 (ms)':<12} {'Throughput':<15} {'Memory (MB)':<12}")
+        lines.append(
+            f"    {'Backend':<15} {'Mean (ms)':<12} {'P95 (ms)':<12} {'Throughput':<15} {'Memory (MB)':<12}"
+        )
         lines.append(f"    {'-'*15} {'-'*12} {'-'*12} {'-'*15} {'-'*12}")
         for bench in valid_benchmarks:
             lat = bench["latency_ms"]
@@ -428,6 +457,7 @@ def _format_results(results: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def run_benchmark(config: dict[str, Any]) -> dict[str, Any]:
     device = resolve_device(config["device"])
@@ -461,6 +491,7 @@ def run_benchmark(config: dict[str, Any]) -> dict[str, Any]:
 
     # Start memory tracking
     import tracemalloc
+
     tracemalloc.start()
 
     # Run benchmarks

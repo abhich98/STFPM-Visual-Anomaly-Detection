@@ -6,11 +6,9 @@ import logging
 from stfpm.config import get_default_config_path, load_merged_config
 from stfpm.deployment.inference import run_onnx_inference
 
-
 logging.basicConfig(
-    level=logging.INFO, 
-    format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +34,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional calibration JSON produced by evaluate.py for is_anomaly decision",
     )
-    parser.add_argument("--output_dir", type=str, default=None, help="Output dir to save output score map image")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Output dir to save output score map image",
+    )
     return parser.parse_args()
 
 
@@ -55,17 +58,20 @@ def main() -> None:
     )
     logger.info(f"Image score: {result['image_score']:.6f}")
     if "is_anomaly" in result:
-        logger.info("Decision: is_anomaly=%s (threshold=%.6f)", result["is_anomaly"], result["threshold"])
+        logger.info(
+            "Decision: is_anomaly=%s (threshold=%.6f)",
+            result["is_anomaly"],
+            result["threshold"],
+        )
 
     if args.output_dir:
-        
+
         from stfpm.deployment.inference import save_score_map_overlay
 
         save_score_map_overlay(
             args.image,
-            result["score_map"][0, 0],
+            result,
             args.output_dir,
-            is_anomaly=result.get("is_anomaly", None),
         )
         logger.info(f"Saved score map overlay to {args.output_dir}")
 

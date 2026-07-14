@@ -9,7 +9,6 @@ from stfpm.evaluation import evaluate_checkpoint
 from stfpm.models import build_stfpm_model
 from stfpm.utils import resolve_device, set_seed
 
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -31,7 +30,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional user config with fields to override from default config",
     )
-    parser.add_argument("--checkpoint", type=str, default=None, help="Optional checkpoint override")
+    parser.add_argument(
+        "--checkpoint", type=str, default=None, help="Optional checkpoint override"
+    )
     return parser.parse_args()
 
 
@@ -46,7 +47,9 @@ def main() -> None:
 
     checkpoint_path = args.checkpoint or config["eval"]["checkpoint_path"]
     if not checkpoint_path:
-        raise ValueError("Checkpoint is required. Provide --checkpoint or eval.checkpoint_path in config.")
+        raise ValueError(
+            "Checkpoint is required. Provide --checkpoint or eval.checkpoint_path in config."
+        )
 
     calibration_cfg = dict(config["eval"]["calibration"])
 
@@ -79,4 +82,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -5,11 +5,23 @@ from typing import Any
 
 import numpy as np
 from PIL import Image
-import cv2
 from torchvision import transforms
 
 from stfpm.deployment.onnx_runtime import load_onnx_session, run_onnx_batch
 from stfpm.evaluation.calibration import load_calibration_artifact
+
+
+def _normalize_score_map(score_map: np.ndarray, threshold: float | None = None) -> np.ndarray:
+
+    min_value = float(score_map.min())
+    max_value = float(score_map.max()) if threshold is None else threshold
+
+    if max_value - min_value < 1e-12:
+        return np.zeros_like(score_map, dtype=np.uint8)
+
+    adjusted = np.clip(score_map, min_value, max_value)
+    normalized = (adjusted - min_value) / (max_value - min_value)
+    return (normalized * 255.0).astype(np.uint8)
 
 
 def preprocess_image(image_path: str, image_size: int) -> np.ndarray:
@@ -59,20 +71,25 @@ def run_onnx_inference(
     return output
 
 
-def save_score_map_overlay(image_path: str, score_map: np.ndarray, output_dir: str, is_anomaly: bool | None = None) -> None:
-    
+def save_score_map_overlay(image_path: str, inference_res: dict, output_dir: str) -> None:
+    import cv2
+
+    input_image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB)
+
+    score_map = inference_res["score_map"][0, 0]
+    score_map_resized = cv2.resize(score_map, (input_image.shape[1], input_image.shape[0]), interpolation=cv2.INTER_LINEAR)
+
+    threshold = inference_res.get("threshold", None)
+    score_map_u8 = _normalize_score_map(score_map_resized, threshold=threshold)
+    heatmap = cv2.applyColorMap(score_map_u8, cv2.COLORMAP_JET)
+    heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+    overlay = cv2.addWeighted(input_image, 0.6, heatmap, 0.4, 0.0)
+
+    is_anomaly = inference_res.get("is_anomaly", None)
     im_name = Path(image_path).stem + "_overlay"
     im_name += "_anomaly" if is_anomaly else "_normal" if is_anomaly is not None else ""
     output_path = Path(output_dir) / (im_name + ".png")
 
-    image = Image.open(image_path).convert("RGB")
-    score_map_resized = Image.fromarray(score_map).resize(image.size, resample=Image.BILINEAR)
-
-    score_map_colored = np.array(score_map_resized.convert("L"))
-    heatmap = np.zeros((score_map_colored.shape[0], score_map_colored.shape[1], 3), dtype=np.uint8)
-    heatmap[..., 0] = score_map_colored
-    heatmap[..., 1] = 0
-    heatmap[..., 2] = 255 - score_map_colored
-    overlay = Image.blend(image, Image.fromarray(heatmap), alpha=0.5)
-
-    overlay.save(output_path)
+    # print("I am here!!!")
+    cv2.imwrite(str(output_path), cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))

@@ -37,14 +37,14 @@ This repo implements the method on the [MVTec AD](https://www.mvtec.com/company/
 | transistor | 0.806192  | 0.924583  | 0.878270 |
 ### Example outputs
 
-<!-- Anomaly heatmap overlay on a defective `transistor` sample:
+Anomaly heatmap overlay on a normal and a defective `transistor` sample:
 
 <p align="center">
-  <img src="./results/001_overlay.png" width="45%" alt="anomaly overlay" />
-  <img src="./results/001_overlay_normal.png" width="45%" alt="normal overlay" />
+  <img src="./figs/001_overlay_normal.png" width="45%" alt="normal overlay" />
+  <img src="./figs/002_overlay_anomaly.png" width="45%" alt="anomaly overlay" />
 </p>
 
-Evaluation plots (ROC curves + confusion matrix) are generated under `results/<category>/`. -->
+Evaluation plots (ROC curves + confusion matrix) are generated under `results/<category>/`.
 
 ## Deployment & Benchmarking
 
